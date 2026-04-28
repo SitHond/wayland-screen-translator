@@ -40,9 +40,44 @@ Basic flow:
 
 The project uses Qt 5, Tesseract, Leptonica, Hunspell, and WebEngine.
 
-Typical build flow:
+Required build dependencies on Fedora/Bazzite-like systems:
 
 ```bash
+sudo rpm-ostree install qt5-qtbase-devel qt5-qttools-devel qt5-qtwebengine-devel qt5-qtx11extras-devel hunspell-devel tesseract-devel leptonica-devel
+```
+
+If you also plan to use Wayland capture helpers on the host:
+
+```bash
+sudo rpm-ostree install slurp grim tesseract tesseract-langpack-eng python3-dbus-next
+```
+
+After layered package changes on Bazzite, reboot before building.
+
+Typical build flow on the host system:
+
+```bash
+cd /var/home/sithond/projects/wayland-screen-translator
 /usr/lib64/qt5/bin/qmake wayland-screen-translator.pro
 make -j4
+```
+
+The resulting binary will be:
+
+```bash
+./wayland-screen-translator
+```
+
+Run it with:
+
+```bash
+./wayland-screen-translator
+```
+
+If you are launching the build from a Flatpak-based shell, run host tools via
+`flatpak-spawn --host`, for example:
+
+```bash
+flatpak-spawn --host /usr/lib64/qt5/bin/qmake wayland-screen-translator.pro
+flatpak-spawn --host make -j4
 ```

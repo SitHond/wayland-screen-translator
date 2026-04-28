@@ -41,9 +41,44 @@ Wayland и поддерживается sithond.
 
 Проект использует Qt 5, Tesseract, Leptonica, Hunspell и WebEngine.
 
-Типичный процесс сборки:
+Зависимости для сборки на Fedora/Bazzite-подобных системах:
 
 ```bash
+sudo rpm-ostree install qt5-qtbase-devel qt5-qttools-devel qt5-qtwebengine-devel qt5-qtx11extras-devel hunspell-devel tesseract-devel leptonica-devel
+```
+
+Если вы также хотите использовать Wayland-захват на хосте:
+
+```bash
+sudo rpm-ostree install slurp grim tesseract tesseract-langpack-eng python3-dbus-next
+```
+
+После установки layered-пакетов на Bazzite нужно перезагрузиться.
+
+Типичный процесс сборки на хост-системе:
+
+```bash
+cd /var/home/sithond/projects/wayland-screen-translator
 /usr/lib64/qt5/bin/qmake wayland-screen-translator.pro
 make -j4
+```
+
+Готовый бинарник будет здесь:
+
+```bash
+./wayland-screen-translator
+```
+
+Запуск:
+
+```bash
+./wayland-screen-translator
+```
+
+Если вы запускаете сборку из Flatpak-окружения, вызывайте host-инструменты
+через `flatpak-spawn --host`, например:
+
+```bash
+flatpak-spawn --host /usr/lib64/qt5/bin/qmake wayland-screen-translator.pro
+flatpak-spawn --host make -j4
 ```
