@@ -231,7 +231,7 @@ QMenu *TrayIcon::contextMenu()
   }
 
   {
-    auto action = menu->addAction(tr("Show translator"));
+    auto action = menu->addAction(tr("Translator internals"));
     connect(action, &QAction::triggered,  //
             this, [this] { manager_.showTranslator(); });
   }

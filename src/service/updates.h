@@ -142,6 +142,7 @@ public:
   void initView(QTreeView* view);
   void setExpansions(const QHash<QString, QString>& expansions);
   void checkForUpdates();
+  bool isConfigured() const;
 
   QDateTime lastUpdateCheck() const;
   void setAutoUpdate(int intervalDays, const QDateTime& lastCheck);

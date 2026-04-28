@@ -104,6 +104,9 @@ Manager::~Manager()
 
 void Manager::warnIfOutdated()
 {
+  if (!updater_ || !updater_->isConfigured())
+    return;
+
   const auto now = QDateTime::currentDateTime();
   const auto binaryInfo = QFileInfo(QApplication::applicationFilePath());
   const auto date = binaryInfo.fileTime(QFile::FileTime::FileBirthTime);
@@ -178,6 +181,9 @@ void Manager::setupProxy(const Settings &settings)
 
 void Manager::setupUpdates(const Settings &settings)
 {
+  if (!updater_ || !updater_->isConfigured())
+    return;
+
   updater_->setExpansions({
       {"$translators$", settings.translatorsPath},
       {"$tessdata$", settings.tessdataPath},

@@ -42,6 +42,8 @@ SettingsEditor::SettingsEditor(Manager &manager, update::Updater &updater)
 
   ui->runAtSystemStart->setEnabled(service::RunAtSystemStart::isAvailable());
 
+  const auto isWayland = qEnvironmentVariableIsSet("WAYLAND_DISPLAY");
+
   {
     struct Info {
       QString title;
@@ -132,9 +134,9 @@ SettingsEditor::SettingsEditor(Manager &manager, update::Updater &updater)
 
   // translation
   ui->translatorHint->setText(
-      tr("<b>NOTE! Some translators might require the translation window to be "
-         "visible. You can make it using the \"Show translator\" entry "
-         "in the tray icon's context menu</b>"));
+      tr("<b>NOTE! Some translators may rely on the internal translator "
+         "window. Open it only if a translation backend explicitly requires "
+         "it via the tray menu entry \"Translator internals\".</b>"));
   ui->translateLangCombo->setModel(models_.targetLanguageModel());
 
   // representation
@@ -172,6 +174,14 @@ SettingsEditor::SettingsEditor(Manager &manager, update::Updater &updater)
   connect(ui->checkUpdates, &QPushButton::clicked,  //
           &updater_, &update::Updater::checkForUpdates);
 
+  if (!updater_.isConfigured()) {
+    ui->pageUpdate->setEnabled(false);
+    ui->pageUpdate->setToolTip(
+        tr("Update backend is not configured for this repository yet."));
+    ui->checkUpdates->setEnabled(false);
+    ui->checkUpdates->setToolTip(ui->pageUpdate->toolTip());
+  }
+
   // about
   {
     const auto maintainer = "sithond";
@@ -198,18 +208,25 @@ SettingsEditor::SettingsEditor(Manager &manager, update::Updater &updater)
            "3. Correction of the recognized text (optional)\n"
            "4. Translation of the corrected text (optional)\n"
            "User interaction is only required for step 1.\n"
-           "Steps 2, 3 and 4 require additional data that can be "
-           "downloaded from "
-           "the updates page.\n"
+           "Steps 2, 3 and 4 require recognizers, translators and optional "
+           "dictionaries to be available in the configured resource paths.\n"
            "\n"
-           "At first start, go to the updates page and install desired "
-           "recognition languages and translators and, optionally, "
-           "hunspell "
-           "dictionaries.\n"
+           "In this fork, the built-in updates page may be unavailable until "
+           "a repository-specific update backend is configured.\n"
+           "Install or copy the desired recognition languages, translators "
+           "and, optionally, Hunspell dictionaries first.\n"
            "Then set default recognition and translation languages, "
            "enable some "
            "(or all) translators and the \"translate text\" setting, "
            "if needed."));
+  }
+
+  if (isWayland) {
+    ui->groupBox->setTitle(tr("Shortcuts (local on Wayland)"));
+    ui->groupBox->setToolTip(
+        tr("Wayland session detected. These shortcuts work only while the "
+           "application is focused; global system-wide hotkeys are not "
+           "available in this build yet."));
   }
 
   new service::WidgetState(this);
@@ -353,10 +370,13 @@ void SettingsEditor::updateState()
   updateCurrentPage();
 
   const auto portableChanged = wasPortable_ != settings.isPortable();
-  ui->pageUpdate->setEnabled(!portableChanged);
-  ui->pageUpdate->setToolTip(portableChanged
-                                 ? tr("Portable changed. Apply settings first")
-                                 : QString());
+  const auto updatesConfigured = updater_.isConfigured();
+  ui->pageUpdate->setEnabled(!portableChanged && updatesConfigured);
+  ui->pageUpdate->setToolTip(
+      !updatesConfigured
+          ? tr("Update backend is not configured for this repository yet.")
+          : portableChanged ? tr("Portable changed. Apply settings first")
+                            : QString());
 }
 
 void SettingsEditor::updateCurrentPage()
@@ -374,6 +394,9 @@ void SettingsEditor::updateCurrentPage()
   ui->pagesView->setCurrentIndex(row);
 
   if (ui->pagesView->currentWidget() != ui->pageUpdate)
+    return;
+
+  if (!updater_.isConfigured())
     return;
 
   if (ui->updatesView->model()->rowCount() == 0)
@@ -497,9 +520,9 @@ void SettingsEditor::validateSettings()
 
   using E = SettingsValidator::Error;
   QMap<E, Page> errorToPage{
-      {E::NoSourceInstalled, Page::Update},
+      {E::NoSourceInstalled, Page::Recognition},
       {E::NoSourceSet, Page::Recognition},
-      {E::NoTranslatorInstalled, Page::Update},
+      {E::NoTranslatorInstalled, Page::Translation},
       {E::NoTranslatorSet, Page::Translation},
       {E::NoTargetSet, Page::Translation},
   };

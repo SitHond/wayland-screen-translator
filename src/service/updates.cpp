@@ -753,6 +753,15 @@ Updater::Updater(const QVector<QUrl> &updateUrls)
   std::shuffle(updateUrls_.begin(), updateUrls_.end(), generator);
 }
 
+bool Updater::isConfigured() const
+{
+  for (const auto &url : updateUrls_) {
+    if (url.isValid() && !url.isEmpty())
+      return true;
+  }
+  return false;
+}
+
 void Updater::initView(QTreeView *view)
 {
   view->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -779,6 +788,10 @@ void Updater::setExpansions(const QHash<QString, QString> &expansions)
 
 void Updater::checkForUpdates()
 {
+  if (!isConfigured()) {
+    emit error(tr("Update backend is not configured for this repository yet."));
+    return;
+  }
   loader_->download(updateUrls_);
 }
 
@@ -896,6 +909,11 @@ QDateTime Updater::lastUpdateCheck() const
 
 void Updater::setAutoUpdate(int intervalDays, const QDateTime &lastCheck)
 {
+  if (!isConfigured()) {
+    autoChecker_.reset();
+    return;
+  }
+
   if (intervalDays < 1) {
     autoChecker_.reset();
     return;
