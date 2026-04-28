@@ -1,0 +1,79 @@
+#pragma once
+
+#include "stfwd.h"
+
+#include <QColor>
+#include <QDateTime>
+#include <QStringList>
+
+#include <chrono>
+#include <map>
+
+enum class ResultMode { Widget, Tooltip };
+
+struct Substitution {
+  QString source;
+  QString target;
+};
+using Substitutions = std::multimap<LanguageId, Substitution>;
+
+enum class ProxyType { Disabled, System, Socks5, Http };
+
+class Settings
+{
+public:
+  void save() const;
+  void load();
+
+  void saveLastUpdateCheck();
+
+  bool isPortable() const;
+  void setPortable(bool isPortable);
+
+  QString captureHotkey{"Ctrl+Alt+Z"};
+  QString repeatCaptureHotkey{"Ctrl+Alt+S"};
+  QString showLastHotkey{"Ctrl+Alt+X"};
+  QString clipboardHotkey{"Ctrl+Alt+C"};
+  QString captureLockedHotkey{"Ctrl+Alt+Q"};
+
+  bool showMessageOnStart{true};
+  bool runAtSystemStart{false};
+
+  ProxyType proxyType{ProxyType::System};
+  QString proxyHostName;
+  int proxyPort{8080};
+  QString proxyUser;
+  QString proxyPassword;
+  bool proxySavePassword{false};
+
+  int autoUpdateIntervalDays{0};
+  QDateTime lastUpdateCheck;
+
+  bool useHunspell{false};
+  QString hunspellPath;
+  Substitutions userSubstitutions;
+  bool useUserSubstitutions{true};
+
+  bool writeTrace{false};
+
+  QString tessdataPath;
+  QString sourceLanguage{"eng"};
+
+  bool doTranslation{true};
+  bool ignoreSslErrors{false};
+  LanguageId targetLanguage{"rus"};
+  std::chrono::seconds translationTimeout{15};
+  QString translatorsPath;
+  QStringList translators{"google.js"};
+
+  ResultMode resultShowType{ResultMode::Widget};  // dialog
+  QString fontFamily;
+  int fontSize{20};
+  QColor fontColor{255, 255, 255};
+  QColor backgroundColor{10, 12, 16, 176};
+  bool showRecognized{false};
+  bool showCaptured{false};
+
+private:
+  bool isPortable_{false};
+};

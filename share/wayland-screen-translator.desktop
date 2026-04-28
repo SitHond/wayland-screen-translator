@@ -1,0 +1,9 @@
+[Desktop Entry]
+Comment=Wayland-native OCR and translation tool
+Exec=wayland-screen-translator
+GenericName=Wayland Screen Translator
+Name=Wayland Screen Translator
+Icon=wayland-screen-translator
+Terminal=false
+Type=Application
+Categories=Utility;Core;Qt;

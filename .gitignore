@@ -1,0 +1,22 @@
+# Compiled translations
+*.qm
+
+# Qt creator user settings
+*.user
+
+*.exe
+distr/content/
+
+*.tar.gz
+__pycache__
+
+# Local builds
+Makefile
+.qmake.stash
+*.o
+moc_*.cpp
+moc_predefs.h
+qrc_recources.cpp
+ui_settingseditor.h
+screen-translator
+wayland-screen-translator
