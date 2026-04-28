@@ -33,6 +33,7 @@ private:
   Representer& representer_;
   const Settings& settings_;
   TaskPtr task_;
+  QWidget* contentPanel_;
   QWidget* imagePlaceholder_;
   QLabel* image_;
   QLabel* recognized_;

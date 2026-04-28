@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QFont>
 #include <QSettings>
 #include <QStandardPaths>
@@ -55,6 +56,24 @@ const QString qs_fontColor = "fontColor";
 const QString qs_backgroundColor = "backgroundColor";
 const QString qs_showRecognized = "showRecognized";
 const QString qs_showCaptured = "showCaptured";
+
+QString firstExistingDir(const QStringList& candidates)
+{
+  for (const auto& candidate : candidates) {
+    if (candidate.isEmpty())
+      continue;
+
+    QFileInfo info(candidate);
+    if (info.exists() && info.isDir())
+      return info.absoluteFilePath();
+  }
+  return {};
+}
+
+QString ensureAbsolutePath(const QString& base, const QString& suffix)
+{
+  return QDir(base).absoluteFilePath(suffix);
+}
 
 QString shuffle(const QString& source)
 {
@@ -331,12 +350,43 @@ void Settings::setPortable(bool isPortable)
 {
   isPortable_ = isPortable;
 
+  const auto appDir = QApplication::applicationDirPath();
+  const auto appDataDir =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   const auto baseDataPath =
-      (isPortable ? QApplication::applicationDirPath()
-                  : QStandardPaths::writableLocation(
-                        QStandardPaths::AppDataLocation)) +
-      "/assets";
-  tessdataPath = baseDataPath + "/tessdata";
-  translatorsPath = baseDataPath + "/translators";
-  hunspellPath = baseDataPath + "/hunspell";
+      (isPortable ? appDir : appDataDir) + "/assets";
+
+  translatorsPath = firstExistingDir({
+      ensureAbsolutePath(appDir, "translators"),
+      ensureAbsolutePath(appDir, "assets/translators"),
+      ensureAbsolutePath(appDir, "share/translators"),
+      ensureAbsolutePath(baseDataPath, "translators"),
+  });
+  if (translatorsPath.isEmpty())
+    translatorsPath = ensureAbsolutePath(baseDataPath, "translators");
+
+  tessdataPath = firstExistingDir({
+      ensureAbsolutePath(appDir, "tessdata"),
+      ensureAbsolutePath(appDir, "assets/tessdata"),
+      ensureAbsolutePath(appDir, "share/tessdata"),
+      ensureAbsolutePath(baseDataPath, "tessdata"),
+      "/usr/share/tessdata",
+      "/usr/share/tesseract/tessdata",
+      "/usr/share/tesseract-ocr/5/tessdata",
+      "/usr/share/tesseract-ocr/tessdata",
+  });
+  if (tessdataPath.isEmpty())
+    tessdataPath = ensureAbsolutePath(baseDataPath, "tessdata");
+
+  hunspellPath = firstExistingDir({
+      ensureAbsolutePath(appDir, "hunspell"),
+      ensureAbsolutePath(appDir, "assets/hunspell"),
+      ensureAbsolutePath(appDir, "share/hunspell"),
+      ensureAbsolutePath(baseDataPath, "hunspell"),
+      "/usr/share/hunspell",
+      "/usr/share/myspell",
+      "/usr/share/myspell/dicts",
+  });
+  if (hunspellPath.isEmpty())
+    hunspellPath = ensureAbsolutePath(baseDataPath, "hunspell");
 }

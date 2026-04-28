@@ -23,6 +23,7 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   : QFrame(parent)
   , representer_(representer)
   , settings_(settings)
+  , contentPanel_(new QWidget(this))
   , imagePlaceholder_(new QWidget(this))
   , image_(new QLabel(imagePlaceholder_))
   , recognized_(new QLabel(this))
@@ -47,6 +48,9 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   setFrameShape(QFrame::NoFrame);
   setFrameShadow(QFrame::Plain);
 
+  contentPanel_->setObjectName(QStringLiteral("contentPanel"));
+  contentPanel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
   imagePlaceholder_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   image_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   recognized_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
@@ -61,6 +65,7 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   recognized_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
   recognized_->setWordWrap(true);
   recognized_->setMargin(0);
+  recognized_->setObjectName(QStringLiteral("recognizedText"));
 
   separator_->setFixedHeight(1);
   separator_->setAutoFillBackground(true);
@@ -70,6 +75,7 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   translated_->setMargin(0);
   translated_->setTextInteractionFlags(Qt::NoTextInteraction);
   translated_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+  translated_->setObjectName(QStringLiteral("translatedText"));
 
   {
     auto clipboardText = contextMenu_->addAction(tr("Copy text"));
@@ -94,13 +100,17 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
 
   installEventFilter(this);
 
-  auto layout = new QVBoxLayout(this);
-  layout->addWidget(imagePlaceholder_);
-  layout->addWidget(recognized_);
-  layout->addWidget(separator_);
-  layout->addWidget(translated_);
+  auto contentLayout = new QVBoxLayout(contentPanel_);
+  contentLayout->addWidget(imagePlaceholder_);
+  contentLayout->addWidget(recognized_);
+  contentLayout->addWidget(separator_);
+  contentLayout->addWidget(translated_);
+  contentLayout->setContentsMargins(18, 14, 18, 14);
+  contentLayout->setSpacing(10);
 
-  layout->setContentsMargins(18, 14, 18, 14);
+  auto layout = new QVBoxLayout(this);
+  layout->addWidget(contentPanel_);
+  layout->setContentsMargins(8, 8, 8, 8);
   layout->setSpacing(0);
 
   updateSettings();
@@ -201,17 +211,17 @@ void ResultWidget::updateSettings()
   QFont font(settings_.fontFamily, settings_.fontSize);
   setFont(font);
 
+  const QColor panelColor(90, 90, 90, 168);
+  const QColor panelBorder(255, 255, 255, 28);
+
   auto palette = this->palette();
-  const auto &backgroundColor = settings_.backgroundColor;
-  palette.setColor(QPalette::Window, backgroundColor);
-  palette.setColor(QPalette::Base, backgroundColor);
+  palette.setColor(QPalette::Window, Qt::transparent);
+  palette.setColor(QPalette::Base, Qt::transparent);
   palette.setColor(QPalette::WindowText, settings_.fontColor);
   palette.setColor(QPalette::Text, settings_.fontColor);
   setPalette(palette);
 
-  const auto separatorColor = backgroundColor.lightness() > 150
-                                  ? backgroundColor.darker()
-                                  : backgroundColor.lighter();
+  const auto separatorColor = QColor(255, 255, 255, 36);
   palette.setColor(QPalette::Window, separatorColor);
   separator_->setPalette(palette);
 
@@ -221,17 +231,33 @@ void ResultWidget::updateSettings()
   recognized_->setVisible(settings_.showRecognized);
   separator_->setVisible(settings_.showCaptured || settings_.showRecognized);
 
+  contentPanel_->setStyleSheet(
+      QStringLiteral(
+          "QWidget#contentPanel {"
+          "background-color: rgba(%1, %2, %3, %4);"
+          "border: 1px solid rgba(%5, %6, %7, %8);"
+          "border-radius: 14px;"
+          "}")
+          .arg(panelColor.red())
+          .arg(panelColor.green())
+          .arg(panelColor.blue())
+          .arg(panelColor.alpha())
+          .arg(panelBorder.red())
+          .arg(panelBorder.green())
+          .arg(panelBorder.blue())
+          .arg(panelBorder.alpha()));
+
   recognized_->setStyleSheet(
       QStringLiteral("QLabel { color: rgba(%1, %2, %3, %4); "
                      "background: transparent; font-size: %5pt; line-height: 1.2; }")
           .arg(settings_.fontColor.red())
           .arg(settings_.fontColor.green())
           .arg(settings_.fontColor.blue())
-          .arg(std::max(110, settings_.fontColor.alpha() - 70))
-          .arg(std::max(10, settings_.fontSize - 3)));
+          .arg(std::max(105, settings_.fontColor.alpha() - 95))
+          .arg(std::max(10, settings_.fontSize - 4)));
   translated_->setStyleSheet(
       QStringLiteral("QLabel { color: rgba(%1, %2, %3, %4); "
-                     "background: transparent; font-size: %5pt; line-height: 1.25; }")
+                     "background: transparent; font-size: %5pt; font-weight: 500; line-height: 1.22; }")
           .arg(settings_.fontColor.red())
           .arg(settings_.fontColor.green())
           .arg(settings_.fontColor.blue())
@@ -300,8 +326,8 @@ void ResultWidget::paintEvent(QPaintEvent *event)
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, true);
   painter.setPen(Qt::NoPen);
-  painter.setBrush(settings_.backgroundColor);
-  painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 12, 12);
+  painter.setBrush(Qt::transparent);
+  painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 16, 16);
 }
 
 void ResultWidget::edit()
