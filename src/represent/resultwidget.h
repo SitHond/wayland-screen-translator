@@ -3,6 +3,7 @@
 #include "stfwd.h"
 
 #include <QFrame>
+#include <Qt>
 
 class QLabel;
 class QMenu;
@@ -28,6 +29,9 @@ protected:
   void paintEvent(QPaintEvent* event) override;
 
 private:
+  Qt::Edges resizeEdgesForPos(const QPoint& pos) const;
+  QRect resizedGeometry(const QPoint& globalPos) const;
+  void updateCursor(const QPoint& pos);
   void updateWindowButtons();
   void edit();
   void copyImage();
@@ -49,6 +53,10 @@ private:
   QLabel* translated_;
   QMenu* contextMenu_;
   QPoint lastPos_;
+  QPoint resizeOrigin_;
+  QRect resizeOriginGeometry_;
+  Qt::Edges activeResizeEdges_{};
   bool dragging_{false};
+  bool resizing_{false};
   bool geometryInitialized_{false};
 };

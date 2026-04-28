@@ -16,6 +16,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QEvent>
 #include <QScreen>
 #include <QSizePolicy>
 #include <QStyle>
@@ -56,10 +57,8 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   setFrameShadow(QFrame::Plain);
 
   contentPanel_->setObjectName(QStringLiteral("contentPanel"));
-  contentPanel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
   titleBar_->setObjectName(QStringLiteral("titleBar"));
-  titleBar_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
   titleLabel_->setObjectName(QStringLiteral("titleLabel"));
   titleLabel_->setText(tr("Translation"));
@@ -164,6 +163,10 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
 
   updateSettings();
   updateWindowButtons();
+
+  setMouseTracking(true);
+  contentPanel_->setMouseTracking(true);
+  titleBar_->setMouseTracking(true);
 }
 
 const TaskPtr &ResultWidget::task() const
@@ -182,7 +185,7 @@ void ResultWidget::show(const TaskPtr &task)
   const auto screen = QApplication::screenAt(task->capturePoint);
   SOFT_ASSERT(screen, return );
   const auto screenRect = screen->availableGeometry();
-  const int maxWidth = std::clamp(screenRect.width() / 2, 320, 760);
+  const int maxWidth = std::clamp(screenRect.width() / 2, 220, 760);
   const int contentWidth = maxWidth - 36;
 
   const auto recognizedText = task->corrected.trimmed().isEmpty()
@@ -221,14 +224,15 @@ void ResultWidget::show(const TaskPtr &task)
   const auto showSeparator = showRecognized || showCapture;
   separator_->setVisible(showSeparator);
 
-  translated_->setMinimumWidth(280);
+  translated_->setMinimumWidth(120);
   translated_->adjustSize();
 
   QWidget::show();
   layout()->activate();
 
-  const auto targetSize = sizeHint().boundedTo(
+  auto targetSize = sizeHint().boundedTo(
       QSize(maxWidth, std::max(screenRect.height() - 24, 240)));
+  targetSize = targetSize.expandedTo(QSize(150, 200));
 
   if (!geometryInitialized_) {
     resize(targetSize);
@@ -249,7 +253,7 @@ void ResultWidget::show(const TaskPtr &task)
     move(rect.topLeft());
     geometryInitialized_ = true;
   } else {
-    resize(std::max(width(), targetSize.width()), targetSize.height());
+    resize(std::max(width(), 150), std::max(height(), 200));
   }
 
   if (!qEnvironmentVariableIsSet("WAYLAND_DISPLAY"))
@@ -357,6 +361,22 @@ void ResultWidget::mousePressEvent(QMouseEvent *event)
   }
 
   if (button == Qt::LeftButton || button == Qt::MiddleButton) {
+    const auto edges = resizeEdgesForPos(event->pos());
+    if (button == Qt::LeftButton && edges) {
+      if (qEnvironmentVariableIsSet("WAYLAND_DISPLAY") && windowHandle()) {
+        windowHandle()->startSystemResize(edges);
+        event->accept();
+        return;
+      }
+
+      resizing_ = true;
+      activeResizeEdges_ = edges;
+      resizeOrigin_ = event->globalPos();
+      resizeOriginGeometry_ = geometry();
+      event->accept();
+      return;
+    }
+
     if (qEnvironmentVariableIsSet("WAYLAND_DISPLAY") && windowHandle()) {
       windowHandle()->startSystemMove();
       event->accept();
@@ -380,12 +400,20 @@ void ResultWidget::updateWindowButtons()
 
 void ResultWidget::mouseMoveEvent(QMouseEvent *event)
 {
+  if (resizing_) {
+    setGeometry(resizedGeometry(event->globalPos()));
+    event->accept();
+    return;
+  }
+
   if (qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
+    updateCursor(event->pos());
     QFrame::mouseMoveEvent(event);
     return;
   }
 
   if (!dragging_) {
+    updateCursor(event->pos());
     QFrame::mouseMoveEvent(event);
     return;
   }
@@ -397,7 +425,10 @@ void ResultWidget::mouseMoveEvent(QMouseEvent *event)
 void ResultWidget::mouseReleaseEvent(QMouseEvent *event)
 {
   if (event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) {
+    resizing_ = false;
+    activeResizeEdges_ = {};
     dragging_ = false;
+    updateCursor(event->pos());
     event->accept();
     return;
   }
@@ -417,6 +448,84 @@ void ResultWidget::paintEvent(QPaintEvent *event)
   painter.setPen(Qt::NoPen);
   painter.setBrush(Qt::transparent);
   painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 16, 16);
+}
+
+Qt::Edges ResultWidget::resizeEdgesForPos(const QPoint &pos) const
+{
+  constexpr int resizeMargin = 8;
+
+  Qt::Edges edges;
+  if (pos.x() <= resizeMargin)
+    edges |= Qt::LeftEdge;
+  else if (pos.x() >= width() - resizeMargin)
+    edges |= Qt::RightEdge;
+
+  if (pos.y() <= resizeMargin)
+    edges |= Qt::TopEdge;
+  else if (pos.y() >= height() - resizeMargin)
+    edges |= Qt::BottomEdge;
+
+  return edges;
+}
+
+QRect ResultWidget::resizedGeometry(const QPoint &globalPos) const
+{
+  auto rect = resizeOriginGeometry_;
+  const auto delta = globalPos - resizeOrigin_;
+
+  if (activeResizeEdges_ & Qt::LeftEdge)
+    rect.setLeft(rect.left() + delta.x());
+  if (activeResizeEdges_ & Qt::RightEdge)
+    rect.setRight(rect.right() + delta.x());
+  if (activeResizeEdges_ & Qt::TopEdge)
+    rect.setTop(rect.top() + delta.y());
+  if (activeResizeEdges_ & Qt::BottomEdge)
+    rect.setBottom(rect.bottom() + delta.y());
+
+  if (rect.width() < 150) {
+    if (activeResizeEdges_ & Qt::LeftEdge)
+      rect.setLeft(rect.right() - 150);
+    else
+      rect.setWidth(150);
+  }
+  if (rect.height() < 200) {
+    if (activeResizeEdges_ & Qt::TopEdge)
+      rect.setTop(rect.bottom() - 200);
+    else
+      rect.setHeight(200);
+  }
+
+  return rect;
+}
+
+void ResultWidget::updateCursor(const QPoint &pos)
+{
+  if (isMaximized()) {
+    unsetCursor();
+    return;
+  }
+
+  const auto edges = resizeEdgesForPos(pos);
+  if ((edges & Qt::LeftEdge && edges & Qt::TopEdge) ||
+      (edges & Qt::RightEdge && edges & Qt::BottomEdge)) {
+    setCursor(Qt::SizeFDiagCursor);
+    return;
+  }
+  if ((edges & Qt::RightEdge && edges & Qt::TopEdge) ||
+      (edges & Qt::LeftEdge && edges & Qt::BottomEdge)) {
+    setCursor(Qt::SizeBDiagCursor);
+    return;
+  }
+  if (edges & (Qt::LeftEdge | Qt::RightEdge)) {
+    setCursor(Qt::SizeHorCursor);
+    return;
+  }
+  if (edges & (Qt::TopEdge | Qt::BottomEdge)) {
+    setCursor(Qt::SizeVerCursor);
+    return;
+  }
+
+  unsetCursor();
 }
 
 void ResultWidget::edit()
