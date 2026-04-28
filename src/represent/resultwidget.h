@@ -6,6 +6,7 @@
 
 class QLabel;
 class QMenu;
+class QPushButton;
 
 class ResultWidget : public QFrame
 {
@@ -20,12 +21,14 @@ public:
   void updateSettings();
 
 protected:
+  void changeEvent(QEvent* event) override;
   void mousePressEvent(QMouseEvent* event) override;
   void mouseMoveEvent(QMouseEvent* event) override;
   void mouseReleaseEvent(QMouseEvent* event) override;
   void paintEvent(QPaintEvent* event) override;
 
 private:
+  void updateWindowButtons();
   void edit();
   void copyImage();
   void copyText();
@@ -34,6 +37,11 @@ private:
   const Settings& settings_;
   TaskPtr task_;
   QWidget* contentPanel_;
+  QWidget* titleBar_;
+  QLabel* titleLabel_;
+  QPushButton* minimizeButton_;
+  QPushButton* maximizeButton_;
+  QPushButton* closeButton_;
   QWidget* imagePlaceholder_;
   QLabel* image_;
   QLabel* recognized_;

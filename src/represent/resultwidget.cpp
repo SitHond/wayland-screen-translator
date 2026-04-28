@@ -8,14 +8,17 @@
 #include <QApplication>
 #include <QBoxLayout>
 #include <QDesktopWidget>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
 #include <QScreen>
 #include <QSizePolicy>
+#include <QStyle>
 #include <QWindow>
 
 ResultWidget::ResultWidget(Manager &manager, Representer &representer,
@@ -24,6 +27,11 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   , representer_(representer)
   , settings_(settings)
   , contentPanel_(new QWidget(this))
+  , titleBar_(new QWidget(contentPanel_))
+  , titleLabel_(new QLabel(this))
+  , minimizeButton_(new QPushButton(this))
+  , maximizeButton_(new QPushButton(this))
+  , closeButton_(new QPushButton(this))
   , imagePlaceholder_(new QWidget(this))
   , image_(new QLabel(imagePlaceholder_))
   , recognized_(new QLabel(this))
@@ -31,11 +39,10 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   , translated_(new QLabel(this))
   , contextMenu_(new QMenu(this))
 {
-  Qt::WindowFlags flags = Qt::WindowStaysOnTopHint;
-  if (qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
-    flags |= Qt::Window;
-  } else {
-    flags |= Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint;
+  Qt::WindowFlags flags = Qt::Window | Qt::FramelessWindowHint |
+                          Qt::WindowStaysOnTopHint;
+  if (!qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
+    flags |= Qt::NoDropShadowWindowHint;
     flags |= Qt::X11BypassWindowManagerHint;
   }
   setWindowFlags(flags);
@@ -51,6 +58,38 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   contentPanel_->setObjectName(QStringLiteral("contentPanel"));
   contentPanel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
+  titleBar_->setObjectName(QStringLiteral("titleBar"));
+  titleBar_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+  titleLabel_->setObjectName(QStringLiteral("titleLabel"));
+  titleLabel_->setText(tr("Translation"));
+  titleLabel_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+  const auto setupButton = [](QPushButton *button, const QString &text,
+                              const QString &name) {
+    button->setObjectName(name);
+    button->setText(text);
+    button->setFlat(true);
+    button->setCursor(Qt::ArrowCursor);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setFixedSize(28, 24);
+  };
+
+  setupButton(minimizeButton_, QStringLiteral("—"),
+              QStringLiteral("windowButton"));
+  setupButton(maximizeButton_, QStringLiteral("□"),
+              QStringLiteral("windowButton"));
+  setupButton(closeButton_, QStringLiteral("×"),
+              QStringLiteral("windowButtonClose"));
+
+  connect(minimizeButton_, &QPushButton::clicked, this,
+          [this] { showMinimized(); });
+  connect(maximizeButton_, &QPushButton::clicked, this, [this] {
+    isMaximized() ? showNormal() : showMaximized();
+    updateWindowButtons();
+  });
+  connect(closeButton_, &QPushButton::clicked, this, [this] { hide(); });
+
   imagePlaceholder_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   image_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   recognized_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
@@ -61,6 +100,15 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   auto imageLayout = new QVBoxLayout(imagePlaceholder_);
   imageLayout->setContentsMargins(0, 0, 0, 0);
   imageLayout->addWidget(image_);
+
+  auto titleLayout = new QHBoxLayout(titleBar_);
+  titleLayout->setContentsMargins(2, 0, 0, 2);
+  titleLayout->setSpacing(6);
+  titleLayout->addWidget(titleLabel_);
+  titleLayout->addStretch(1);
+  titleLayout->addWidget(minimizeButton_);
+  titleLayout->addWidget(maximizeButton_);
+  titleLayout->addWidget(closeButton_);
 
   recognized_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
   recognized_->setWordWrap(true);
@@ -101,12 +149,13 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   installEventFilter(this);
 
   auto contentLayout = new QVBoxLayout(contentPanel_);
+  contentLayout->addWidget(titleBar_);
   contentLayout->addWidget(imagePlaceholder_);
   contentLayout->addWidget(recognized_);
   contentLayout->addWidget(separator_);
   contentLayout->addWidget(translated_);
   contentLayout->setContentsMargins(18, 14, 18, 14);
-  contentLayout->setSpacing(10);
+  contentLayout->setSpacing(9);
 
   auto layout = new QVBoxLayout(this);
   layout->addWidget(contentPanel_);
@@ -114,6 +163,7 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   layout->setSpacing(0);
 
   updateSettings();
+  updateWindowButtons();
 }
 
 const TaskPtr &ResultWidget::task() const
@@ -211,8 +261,8 @@ void ResultWidget::updateSettings()
   QFont font(settings_.fontFamily, settings_.fontSize);
   setFont(font);
 
-  const QColor panelColor(90, 90, 90, 168);
-  const QColor panelBorder(255, 255, 255, 28);
+  const QColor panelColor(102, 102, 102, 168);
+  const QColor panelBorder(255, 255, 255, 24);
 
   auto palette = this->palette();
   palette.setColor(QPalette::Window, Qt::transparent);
@@ -237,6 +287,30 @@ void ResultWidget::updateSettings()
           "background-color: rgba(%1, %2, %3, %4);"
           "border: 1px solid rgba(%5, %6, %7, %8);"
           "border-radius: 14px;"
+          "}"
+          "QWidget#titleBar {"
+          "background: transparent;"
+          "border: none;"
+          "}"
+          "QLabel#titleLabel {"
+          "color: rgba(255, 255, 255, 150);"
+          "background: transparent;"
+          "font-size: %9pt;"
+          "font-weight: 500;"
+          "}"
+          "QPushButton#windowButton, QPushButton#windowButtonClose {"
+          "color: rgba(255, 255, 255, 188);"
+          "background: rgba(255, 255, 255, 18);"
+          "border: none;"
+          "border-radius: 8px;"
+          "padding: 0;"
+          "font-size: %10pt;"
+          "}"
+          "QPushButton#windowButton:hover {"
+          "background: rgba(255, 255, 255, 34);"
+          "}"
+          "QPushButton#windowButtonClose:hover {"
+          "background: rgba(255, 110, 110, 90);"
           "}")
           .arg(panelColor.red())
           .arg(panelColor.green())
@@ -245,7 +319,9 @@ void ResultWidget::updateSettings()
           .arg(panelBorder.red())
           .arg(panelBorder.green())
           .arg(panelBorder.blue())
-          .arg(panelBorder.alpha()));
+          .arg(panelBorder.alpha())
+          .arg(std::max(9, settings_.fontSize - 7))
+          .arg(std::max(10, settings_.fontSize - 6)));
 
   recognized_->setStyleSheet(
       QStringLiteral("QLabel { color: rgba(%1, %2, %3, %4); "
@@ -263,6 +339,13 @@ void ResultWidget::updateSettings()
           .arg(settings_.fontColor.blue())
           .arg(settings_.fontColor.alpha())
           .arg(settings_.fontSize));
+}
+
+void ResultWidget::changeEvent(QEvent *event)
+{
+  if (event && event->type() == QEvent::WindowStateChange)
+    updateWindowButtons();
+  QFrame::changeEvent(event);
 }
 
 void ResultWidget::mousePressEvent(QMouseEvent *event)
@@ -287,6 +370,12 @@ void ResultWidget::mousePressEvent(QMouseEvent *event)
   }
 
   QFrame::mousePressEvent(event);
+}
+
+void ResultWidget::updateWindowButtons()
+{
+  maximizeButton_->setText(isMaximized() ? QStringLiteral("❐")
+                                         : QStringLiteral("□"));
 }
 
 void ResultWidget::mouseMoveEvent(QMouseEvent *event)
