@@ -9,6 +9,7 @@
 #include <QBoxLayout>
 #include <QDesktopWidget>
 #include <QLabel>
+#include <QLayout>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -52,9 +53,14 @@ ResultWidget::ResultWidget(Manager &manager, Representer &representer,
   translated_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
   separator_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
+  image_->setAlignment(Qt::AlignCenter);
+  auto imageLayout = new QVBoxLayout(imagePlaceholder_);
+  imageLayout->setContentsMargins(0, 0, 0, 0);
+  imageLayout->addWidget(image_);
+
   recognized_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
   recognized_->setWordWrap(true);
-  recognized_->setMargin(10);
+  recognized_->setMargin(0);
 
   separator_->setFixedHeight(1);
   separator_->setAutoFillBackground(true);
@@ -113,24 +119,59 @@ void ResultWidget::show(const TaskPtr &task)
   if (text.isEmpty())
     return;
 
-  translated_->setText(text);
-  translated_->setToolTip(task->usedTranslator);
-  translated_->show();
-
   const auto screen = QApplication::screenAt(task->capturePoint);
   SOFT_ASSERT(screen, return );
   const auto screenRect = screen->availableGeometry();
-
   const int maxWidth = std::clamp(screenRect.width() / 2, 320, 760);
+  const int contentWidth = maxWidth - 36;
+
+  const auto recognizedText = task->corrected.trimmed().isEmpty()
+                                  ? task->recognized.trimmed()
+                                  : task->corrected.trimmed();
+
+  const bool showCapture = settings_.showCaptured && !task->captured.isNull();
+  const bool showRecognized =
+      settings_.showRecognized && !recognizedText.isEmpty();
+
+  if (showCapture) {
+    const auto maxImageSize = QSize(contentWidth, screenRect.height() / 3);
+    image_->setPixmap(task->captured.scaled(maxImageSize, Qt::KeepAspectRatio,
+                                            Qt::SmoothTransformation));
+    imagePlaceholder_->show();
+    image_->show();
+  } else {
+    image_->clear();
+    imagePlaceholder_->hide();
+  }
+
+  if (showRecognized) {
+    recognized_->setText(recognizedText);
+    recognized_->setMaximumWidth(contentWidth);
+    recognized_->show();
+  } else {
+    recognized_->clear();
+    recognized_->hide();
+  }
+
+  translated_->setText(text);
+  translated_->setToolTip(task->usedTranslator);
+  translated_->setMaximumWidth(contentWidth);
+  translated_->show();
+
+  const auto showSeparator = showRecognized || showCapture;
+  separator_->setVisible(showSeparator);
+
   translated_->setMinimumWidth(280);
-  translated_->setMaximumWidth(maxWidth - 36);
   translated_->adjustSize();
 
   QWidget::show();
   layout()->activate();
 
+  const auto targetSize = sizeHint().boundedTo(
+      QSize(maxWidth, std::max(screenRect.height() - 24, 240)));
+
   if (!geometryInitialized_) {
-    resize(sizeHint());
+    resize(targetSize);
 
     QRect rect(task->capturePoint, size());
     rect.translate(0, -height() - 16);
@@ -147,6 +188,8 @@ void ResultWidget::show(const TaskPtr &task)
 
     move(rect.topLeft());
     geometryInitialized_ = true;
+  } else {
+    resize(std::max(width(), targetSize.width()), targetSize.height());
   }
 
   if (!qEnvironmentVariableIsSet("WAYLAND_DISPLAY"))
@@ -172,16 +215,20 @@ void ResultWidget::updateSettings()
   palette.setColor(QPalette::Window, separatorColor);
   separator_->setPalette(palette);
 
-  imagePlaceholder_->hide();
+  imagePlaceholder_->setVisible(settings_.showCaptured);
   imagePlaceholder_->setMinimumSize(0, 0);
-  imagePlaceholder_->setMaximumSize(0, 0);
-  recognized_->hide();
-  recognized_->setMinimumHeight(0);
-  recognized_->setMaximumHeight(0);
-  separator_->hide();
-  separator_->setMinimumHeight(0);
-  separator_->setMaximumHeight(0);
+  imagePlaceholder_->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+  recognized_->setVisible(settings_.showRecognized);
+  separator_->setVisible(settings_.showCaptured || settings_.showRecognized);
 
+  recognized_->setStyleSheet(
+      QStringLiteral("QLabel { color: rgba(%1, %2, %3, %4); "
+                     "background: transparent; font-size: %5pt; line-height: 1.2; }")
+          .arg(settings_.fontColor.red())
+          .arg(settings_.fontColor.green())
+          .arg(settings_.fontColor.blue())
+          .arg(std::max(110, settings_.fontColor.alpha() - 70))
+          .arg(std::max(10, settings_.fontSize - 3)));
   translated_->setStyleSheet(
       QStringLiteral("QLabel { color: rgba(%1, %2, %3, %4); "
                      "background: transparent; font-size: %5pt; line-height: 1.25; }")
